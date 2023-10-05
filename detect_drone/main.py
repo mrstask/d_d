@@ -1,3 +1,4 @@
+import csv
 import os
 
 import cv2
@@ -53,6 +54,40 @@ def detect_drone(background_gray, current_gray, min_contour_area=MIN_CONTOUR_ARE
     return None
 
 
+def initialize_tracker(current, bbox):
+    tracker = cv2.TrackerKCF_create()
+    tracker.init(current, bbox)
+    return tracker
+
+
+def update_tracker(tracker, current):
+    success, box = tracker.update(current)
+    if success:
+        bbox = tuple(int(v) for v in box)
+        cv2.rectangle(current, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 255, 0), 2)
+        return bbox, True
+    return None, False
+
+
+def redetect_drone(background_gray, current_gray, current):
+    bbox = detect_drone(background_gray, current_gray)
+    if bbox is not None:
+        cv2.rectangle(current, (bbox[0], bbox[1]), (bbox[0] + bbox[2], bbox[1] + bbox[3]), (0, 0, 255), 2)
+        return bbox
+    return None
+
+
+def record_data(frame_idx, bbox, trajectory_data):
+    trajectory_data.append([frame_idx, *bbox])
+
+
+def write_data_to_csv(trajectory_data):
+    with open('trajectory_data.csv', mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Frame", "X", "Y", "Width", "Height"])
+        writer.writerows(trajectory_data)
+
+
 def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg") -> None:
     frames = sorted([f for f in os.listdir(frames_dir) if f.endswith(image_extension)], key=key_function)
     if not frames:
@@ -62,7 +97,9 @@ def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg
     background, background_gray = load_frame(frames_dir, background_filename)
 
     tracker = None
-    for frame in frames:
+    trajectory_data = []
+
+    for idx, frame in enumerate(frames):
         print(f"Processing frame: {frame}")
         current, current_gray = load_frame(frames_dir, frame)
 
@@ -71,25 +108,22 @@ def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg
             tracker, bbox = identify_and_show_changes(frames_dir, background_filename, frame)
         else:
             print("Updating tracker...")
-            success, box = tracker.update(current)
-            if success:
-                x, y, w, h = [int(v) for v in box]
-                cv2.rectangle(current, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                print(f"Tracker found the drone at {x, y, w, h}")
-            else:
+            bbox, success = update_tracker(tracker, current)
+            if not success:
                 print("Tracker update failed. Re-detecting...")
-                bbox = detect_drone(background_gray, current_gray)
+                bbox = redetect_drone(background_gray, current_gray, current)
                 if bbox is not None:
-                    x, y, w, h = bbox
-                    tracker = cv2.TrackerKCF_create()
-                    tracker.init(current, (x, y, w, h))
-                    cv2.rectangle(current, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Red for re-detection
+                    tracker = initialize_tracker(current, bbox)
+
+        if bbox is not None:
+            record_data(idx, bbox, trajectory_data)
 
         cv2.imshow("Current Image", current)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+    write_data_to_csv(trajectory_data)
+
 
 if __name__ == '__main__':
-    # extract_frames_from_video("4.mp4")
     compare_frames_with_background("frames")
