@@ -1,28 +1,15 @@
 import os
-from typing import Tuple
 
 import cv2
 
+from detect_drone.filters import is_contour_large_enough
 from detect_drone.helpers import key_function
+from detect_drone.image_preprocessing import prepare_images
 
 THRESHOLD_VALUE = 30
 MAX_VALUE = 255
 IMAGE_EXTENSION = ".jpg"
 MIN_CONTOUR_AREA = 200
-
-
-def is_contour_large_enough(contour, min_contour_area: int) -> bool:
-    return cv2.contourArea(contour) >= min_contour_area
-
-
-def prepare_images(image_dir, background_filename, current_filename):
-    background_path = os.path.join(image_dir, background_filename)
-    current_path = os.path.join(image_dir, current_filename)
-    background = cv2.imread(background_path)
-    current = cv2.imread(current_path)
-    background_gray = cv2.cvtColor(background, cv2.COLOR_BGR2GRAY)
-    current_gray = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
-    return background, current, background_gray, current_gray
 
 
 def detect_changes(background_gray, current_gray):
@@ -36,19 +23,19 @@ def identify_and_show_changes(image_dir, background_filename, current_filename, 
     background, current, background_gray, current_gray = prepare_images(image_dir, background_filename,
                                                                         current_filename)
     contours = detect_changes(background_gray, current_gray)
-    tracker = None  # Initialize tracker to None
+    tracker = None
+    bbox = None
     for contour in contours:
         bounding_rect = cv2.boundingRect(contour)
         if is_contour_large_enough(contour, min_contour_area):
             x, y, w, h = bounding_rect
             cv2.rectangle(current, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            tracker = cv2.TrackerKCF_create()  # Create a tracker instance, e.g., KCF tracker
-            tracker.init(current, (x, y, w, h))  # Initialize tracker with initial bounding box
+            tracker = cv2.TrackerKCF_create()
+            tracker.init(current, (x, y, w, h))
+            bbox = (x, y, w, h)
+            break
 
-    cv2.imshow("Current Image", current)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    return tracker
+    return tracker, bbox  # Return both tracker and bounding box
 
 
 def load_frame(image_dir, filename):
@@ -58,22 +45,49 @@ def load_frame(image_dir, filename):
     return frame, frame_gray
 
 
+def detect_drone(background_gray, current_gray, min_contour_area=MIN_CONTOUR_AREA):
+    contours = detect_changes(background_gray, current_gray)
+    for contour in contours:
+        if is_contour_large_enough(contour, min_contour_area):
+            return cv2.boundingRect(contour)
+    return None
+
+
 def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg") -> None:
     frames = sorted([f for f in os.listdir(frames_dir) if f.endswith(image_extension)], key=key_function)
     if not frames:
         raise FileNotFoundError(f"No images found in the directory: {frames_dir}")
 
-    background = frames.pop(0)
+    background_filename = frames.pop(0)
+    background, background_gray = load_frame(frames_dir, background_filename)
+
     tracker = None
     for frame in frames:
+        print(f"Processing frame: {frame}")
         current, current_gray = load_frame(frames_dir, frame)
+
         if tracker is None:
-            tracker = identify_and_show_changes(frames_dir, background, frame)
+            print("Initializing tracker...")
+            tracker, bbox = identify_and_show_changes(frames_dir, background_filename, frame)
         else:
+            print("Updating tracker...")
             success, box = tracker.update(current)
             if success:
                 x, y, w, h = [int(v) for v in box]
                 cv2.rectangle(current, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                print(f"Tracker found the drone at {x, y, w, h}")
+            else:
+                print("Tracker update failed. Re-detecting...")
+                bbox = detect_drone(background_gray, current_gray)
+                if bbox is not None:
+                    x, y, w, h = bbox
+                    tracker = cv2.TrackerKCF_create()
+                    tracker.init(current, (x, y, w, h))
+                    cv2.rectangle(current, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Red for re-detection
+
+        cv2.imshow("Current Image", current)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
