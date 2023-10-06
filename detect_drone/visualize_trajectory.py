@@ -1,8 +1,10 @@
 import csv
 import matplotlib.pyplot as plt
 
+from detect_drone.settings import OUTPUT_DIR
 
-def read_trajectory_data(filename='trajectory_data.csv'):
+
+def read_trajectory_data(filename=f'{OUTPUT_DIR}/trajectory_data.csv'):
     data = []
     with open(filename, newline='') as file:
         reader = csv.reader(file)

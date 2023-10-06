@@ -23,14 +23,14 @@ def draw_trajectory_plot(frame_numbers, x_coordinates, y_coordinates, current_fr
 
 
 def convert_figure_to_image(figure):
-    canvas = FigureCanvasAgg(figure)  # Direct usage
+    canvas = FigureCanvasAgg(figure)
     canvas.draw()
     renderer = canvas.get_renderer()
     plot_image_data = np.frombuffer(renderer.buffer_rgba(), dtype=np.uint8)
-    plot_image_data = plot_image_data.reshape(int(renderer.width), int(renderer.height), -1)  # Convert to int
+    plot_image_data = plot_image_data.reshape(int(renderer.width), int(renderer.height), -1)
     plot_image_bgr = cv2.cvtColor(plot_image_data, cv2.COLOR_RGBA2BGR)
     plot_image_bgr = plot_image_bgr[:, :, :3]
-    plt.close(figure)  # Close the figure to free up memory
+    plt.close(figure)
     return plot_image_bgr
 
 

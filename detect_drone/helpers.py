@@ -6,12 +6,10 @@ import cv2
 def extract_frames_from_video(video_path: str, output_dir: str = "frames") -> None:
     """
     Extract frames from a video and save them as images in a specified directory.
-
     Parameters:
         video_path (str): The file path of the input video.
         output_dir (str, optional): The directory where extracted frames will be saved.
                                     Defaults to "frames".
-
     Returns:
         None
     """
