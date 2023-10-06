@@ -3,6 +3,10 @@ import os
 
 import cv2
 
+import matplotlib.pyplot as plt
+import matplotlib.backends.backend_agg as agg
+import numpy as np
+
 from detect_drone.filters import is_contour_large_enough
 from detect_drone.helpers import key_function
 from detect_drone.image_preprocessing import prepare_images
@@ -88,6 +92,37 @@ def write_data_to_csv(trajectory_data):
         writer.writerows(trajectory_data)
 
 
+def draw_trajectory_plot(frame_numbers, x_coords, y_coords, current):
+    fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
+    ax.plot(frame_numbers, x_coords, label='X Coordinate')
+    ax.plot(frame_numbers, y_coords, label='Y Coordinate')
+    ax.legend()
+
+    canvas = agg.FigureCanvasAgg(fig)
+    canvas.draw()
+    renderer = canvas.get_renderer()
+    plot_img = np.frombuffer(renderer.buffer_rgba(), dtype=np.uint8)
+    plot_img = plot_img.reshape(int(renderer.width), int(renderer.height), -1)  # Convert to int
+    plot_img_bgr = cv2.cvtColor(plot_img, cv2.COLOR_RGBA2BGR)
+    plot_img_bgr = plot_img_bgr[:, :, :3]
+    cv2.imshow('ss', plot_img)
+    h1, w1 = current.shape[:2]
+    h2, w2 = plot_img_bgr.shape[:2]
+
+    vis = np.zeros((h1 + h2, max(w1, w2), 3), np.uint8)
+    vis[:h1, :w1, :3] = current
+    offset = (w1 - w2) // 2  # Calculate the horizontal offset to center plot_img_bgr
+    vis[h1:h1 + h2, offset:offset + w2, :3] = plot_img_bgr
+    print(f'plot_img_bgr dimensions: {plot_img_bgr.shape}')
+    print(f'current dimensions: {current.shape}')
+    print(f'vis dimensions: {vis.shape}')
+
+    fig.savefig('plot.png')
+    plt.close(fig)
+    cv2.imwrite('vis.png', vis)
+    return vis
+
+
 def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg") -> None:
     frames = sorted([f for f in os.listdir(frames_dir) if f.endswith(image_extension)], key=key_function)
     if not frames:
@@ -98,6 +133,7 @@ def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg
 
     tracker = None
     trajectory_data = []
+    frame_numbers, x_coords, y_coords = [], [], []
 
     for idx, frame in enumerate(frames):
         print(f"Processing frame: {frame}")
@@ -117,8 +153,13 @@ def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg
 
         if bbox is not None:
             record_data(idx, bbox, trajectory_data)
+            frame_numbers.append(idx)
+            x_coords.append(bbox[0] + bbox[2] / 2)
+            y_coords.append(bbox[1] + bbox[3] / 2)
 
-        cv2.imshow("Current Image", current)
+        vis = draw_trajectory_plot(frame_numbers, x_coords, y_coords, current)
+
+        cv2.imshow("Current Image", vis)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
