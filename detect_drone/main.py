@@ -7,6 +7,7 @@ from detect_drone.helpers import key_function
 from detect_drone.image_preprocessing import prepare_images
 from detect_drone.outputs import write_data_to_csv
 from detect_drone.plotting import draw_trajectory_plot
+from detect_drone.settings import INPUT_DIR
 from detect_drone.trajectory import update_tracker, initialize_tracker, record_data
 
 THRESHOLD_VALUE = 30
@@ -108,4 +109,4 @@ def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg
 
 
 if __name__ == '__main__':
-    compare_frames_with_background("frames")
+    compare_frames_with_background(f"{INPUT_DIR}/frames")

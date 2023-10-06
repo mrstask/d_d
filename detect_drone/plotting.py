@@ -4,6 +4,8 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 from detect_drone.outputs import save_visualizations
+from detect_drone.settings import OUTPUT_DIR
+import seaborn as sns
 
 
 def create_trajectory_plot(frame_numbers, x_coordinates, y_coordinates):
@@ -43,3 +45,14 @@ def combine_current_frame_with_plot(current_frame, plot_image_bgr):
     combined_image[frame_height:frame_height + plot_image_height,
     horizontal_offset:horizontal_offset + plot_image_width, :3] = plot_image_bgr
     return combined_image
+
+
+def create_trajectory_plot_seaborn(frame_numbers, x_coordinates, y_coordinates):
+    sns.set(style="darkgrid")
+    plt.figure(figsize=(5, 4), dpi=100)
+    sns.lineplot(x=frame_numbers, y=x_coordinates, label='X Coordinate')
+    sns.lineplot(x=frame_numbers, y=y_coordinates, label='Y Coordinate')
+    plt.legend()
+    plt.savefig(f'{OUTPUT_DIR}/plot_seaborn.png')  # Save the plot directly
+    plt.close()
+
