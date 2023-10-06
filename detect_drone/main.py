@@ -92,35 +92,48 @@ def write_data_to_csv(trajectory_data):
         writer.writerows(trajectory_data)
 
 
-def draw_trajectory_plot(frame_numbers, x_coords, y_coords, current):
-    fig, ax = plt.subplots(figsize=(5, 4), dpi=100)
-    ax.plot(frame_numbers, x_coords, label='X Coordinate')
-    ax.plot(frame_numbers, y_coords, label='Y Coordinate')
-    ax.legend()
+def create_trajectory_plot(frame_numbers, x_coordinates, y_coordinates):
+    figure, axis = plt.subplots(figsize=(5, 4), dpi=100)
+    axis.plot(frame_numbers, x_coordinates, label='X Coordinate')
+    axis.plot(frame_numbers, y_coordinates, label='Y Coordinate')
+    axis.legend()
+    return figure, axis
 
-    canvas = agg.FigureCanvasAgg(fig)
+
+def convert_figure_to_image(figure):
+    canvas = agg.FigureCanvasAgg(figure)
     canvas.draw()
     renderer = canvas.get_renderer()
-    plot_img = np.frombuffer(renderer.buffer_rgba(), dtype=np.uint8)
-    plot_img = plot_img.reshape(int(renderer.width), int(renderer.height), -1)  # Convert to int
-    plot_img_bgr = cv2.cvtColor(plot_img, cv2.COLOR_RGBA2BGR)
-    plot_img_bgr = plot_img_bgr[:, :, :3]
-    cv2.imshow('ss', plot_img)
-    h1, w1 = current.shape[:2]
-    h2, w2 = plot_img_bgr.shape[:2]
+    plot_image_data = np.frombuffer(renderer.buffer_rgba(), dtype=np.uint8)
+    plot_image_data = plot_image_data.reshape(int(renderer.width), int(renderer.height), -1)
+    plot_image_bgr = cv2.cvtColor(plot_image_data, cv2.COLOR_RGBA2BGR)
+    plot_image_bgr = plot_image_bgr[:, :, :3]
+    plt.close(figure)
+    return plot_image_bgr
 
-    vis = np.zeros((h1 + h2, max(w1, w2), 3), np.uint8)
-    vis[:h1, :w1, :3] = current
-    offset = (w1 - w2) // 2  # Calculate the horizontal offset to center plot_img_bgr
-    vis[h1:h1 + h2, offset:offset + w2, :3] = plot_img_bgr
-    print(f'plot_img_bgr dimensions: {plot_img_bgr.shape}')
-    print(f'current dimensions: {current.shape}')
-    print(f'vis dimensions: {vis.shape}')
 
-    fig.savefig('plot.png')
-    plt.close(fig)
-    cv2.imwrite('vis.png', vis)
-    return vis
+def combine_current_frame_with_plot(current_frame, plot_image_bgr):
+    frame_height, frame_width = current_frame.shape[:2]
+    plot_image_height, plot_image_width = plot_image_bgr.shape[:2]
+    combined_image = np.zeros((frame_height + plot_image_height, max(frame_width, plot_image_width), 3), np.uint8)
+    combined_image[:frame_height, :frame_width, :3] = current_frame
+    horizontal_offset = (frame_width - plot_image_width) // 2
+    combined_image[frame_height:frame_height + plot_image_height,
+    horizontal_offset:horizontal_offset + plot_image_width, :3] = plot_image_bgr
+    return combined_image
+
+
+def save_visualizations(figure, combined_image):
+    figure.savefig('trajectory_plot.png')
+    cv2.imwrite('combined_visualization.png', combined_image)
+
+
+def draw_trajectory_plot(frame_numbers, x_coordinates, y_coordinates, current_frame):
+    figure, axis = create_trajectory_plot(frame_numbers, x_coordinates, y_coordinates)
+    plot_image_bgr = convert_figure_to_image(figure)
+    combined_image = combine_current_frame_with_plot(current_frame, plot_image_bgr)
+    save_visualizations(figure, combined_image)
+    return combined_image
 
 
 def compare_frames_with_background(frames_dir: str, image_extension: str = ".jpg") -> None:
